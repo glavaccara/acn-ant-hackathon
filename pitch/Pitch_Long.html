@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cash Compass — Team Fuzzy Flask</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --bg-2: #11151a;
+    --ink: #e8eaed;
+    --ink-dim: #9aa3ad;
+    --ink-faint: #5d6770;
+    --line: #1f262e;
+    --accent: #d97757;       /* Anthropic clay */
+    --accent-2: #f0a07a;
+    --good: #7cc594;
+    --warn: #e6c66a;
+    --bad: #e07a7a;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); height: 100%; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+
+  /* Deck */
+  .deck { width: 100vw; height: 100vh; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none !important;
+    padding: 5vh 7vw 8vh;
+    overflow: auto;
+  }
+  .slide.active {
+    display: flex !important;
+    flex-direction: column;
+    animation: fade .35s ease-out;
+  }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Type */
+  h1 { font-size: clamp(2.4rem, 5vw, 4.2rem); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 .6rem; font-weight: 700; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); line-height: 1.15; letter-spacing: -0.015em; margin: 0 0 1.2rem; font-weight: 650; }
+  h3 { font-size: 1.1rem; margin: 0 0 .4rem; color: var(--ink); font-weight: 600; }
+  p, li { font-size: clamp(1rem, 1.25vw, 1.15rem); line-height: 1.55; color: var(--ink); }
+  .lede { font-size: clamp(1.1rem, 1.5vw, 1.4rem); color: var(--ink-dim); max-width: 60ch; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.78rem; color: var(--accent); font-weight: 600; margin-bottom: 1.2rem; }
+  code, .mono { font-family: var(--mono); font-size: 0.92em; }
+  .ink-dim { color: var(--ink-dim); }
+  .ink-faint { color: var(--ink-faint); }
+  .accent { color: var(--accent); }
+  strong { color: var(--ink); font-weight: 650; }
+  ul { padding-left: 1.2rem; }
+  li { margin-bottom: .45rem; }
+  .small { font-size: 0.92rem; }
+
+  /* Layout helpers */
+  .row { display: flex; gap: 2.5rem; align-items: stretch; }
+  .row.tight { gap: 1.4rem; }
+  .col { flex: 1; min-width: 0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .stretch { flex: 1; }
+  /* `.center` only adjusts alignment; do NOT touch `display` here or it will
+     override `.slide { display:none }` for non-active centered slides. */
+  .slide.center { align-items: center; justify-content: center; text-align: center; }
+
+  /* Cards */
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.3rem 1.4rem;
+  }
+  .card.accent { border-color: rgba(217,119,87,0.35); }
+  .card.good { border-color: rgba(124,197,148,0.30); }
+  .card.bad { border-color: rgba(224,122,122,0.30); }
+  .card h3 { margin-bottom: .6rem; }
+  .card .num { font-family: var(--mono); font-size: 1.8rem; color: var(--accent); display: block; margin-bottom: .35rem; }
+
+  /* Pills + tags */
+  .pill {
+    display: inline-block; padding: 0.18rem 0.55rem; border: 1px solid var(--line);
+    border-radius: 999px; font-size: 0.78rem; color: var(--ink-dim); margin-right: .3rem;
+  }
+  .pill.accent { border-color: rgba(217,119,87,0.5); color: var(--accent); }
+  .pill.good { border-color: rgba(124,197,148,0.5); color: var(--good); }
+  .pill.bad { border-color: rgba(224,122,122,0.5); color: var(--bad); }
+
+  /* Code blocks */
+  pre {
+    background: #06080a; border: 1px solid var(--line); border-radius: 8px;
+    padding: 1rem 1.1rem; overflow: auto; font-family: var(--mono);
+    font-size: 0.9rem; color: #cbd2d9; line-height: 1.55;
+    margin: 0;
+  }
+  pre .k { color: var(--accent-2); }
+  pre .c { color: var(--ink-faint); font-style: italic; }
+  pre .s { color: #a8d0a0; }
+  pre .n { color: #e6c66a; }
+
+  /* Architecture diagram */
+  .arch {
+    font-family: var(--mono); font-size: 0.92rem; line-height: 1.55;
+    background: #06080a; border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.2rem 1.4rem; color: #cbd2d9; white-space: pre;
+    overflow: auto;
+  }
+  .arch .b { color: var(--accent); font-weight: 600; }
+  .arch .h { color: var(--good); }
+  .arch .s { color: var(--ink-faint); }
+
+  /* Tables */
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-dim); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  td.mono { font-family: var(--mono); font-size: 0.9rem; color: var(--accent-2); }
+
+  /* Cover slide */
+  .cover { background: radial-gradient(1200px 600px at 30% 20%, rgba(217,119,87,0.10), transparent 60%); }
+  .cover h1 { font-size: clamp(3.2rem, 7vw, 6rem); }
+  .cover .tag { font-size: 1.2rem; color: var(--ink-dim); margin-top: 1rem; max-width: 56ch; }
+  .cover .meta { margin-top: 3rem; color: var(--ink-faint); font-size: 0.95rem; letter-spacing: 0.04em; }
+  .cover .compass {
+    width: 92px; height: 92px; border-radius: 50%; border: 2px solid var(--accent);
+    position: relative; margin-bottom: 2rem;
+    background: radial-gradient(circle at 50% 50%, rgba(217,119,87,0.18), transparent 70%);
+  }
+  .cover .compass::before {
+    content: ''; position: absolute; left: 50%; top: 8px; bottom: 8px; width: 2px;
+    background: linear-gradient(to bottom, var(--accent) 0 50%, var(--ink-faint) 50% 100%);
+    transform: translateX(-50%) rotate(28deg); transform-origin: 50% 50%;
+  }
+  .cover .compass::after {
+    content: 'N'; position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    color: var(--accent); font-size: 0.78rem; letter-spacing: 0.2em;
+  }
+
+  /* Quote */
+  blockquote {
+    margin: 0; padding: 1rem 1.4rem; border-left: 3px solid var(--accent);
+    color: var(--ink); font-size: 1.1rem; line-height: 1.6; background: rgba(217,119,87,0.04);
+  }
+
+  /* Footer / nav */
+  .chrome {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.7rem 1.2rem; font-size: 0.78rem; color: var(--ink-faint);
+    font-family: var(--mono); pointer-events: none;
+  }
+  .chrome .left { letter-spacing: 0.15em; text-transform: uppercase; }
+  .chrome .right { letter-spacing: 0.1em; }
+  .progress {
+    position: fixed; left: 0; top: 0; height: 2px; background: var(--accent);
+    transition: width .35s ease-out; z-index: 10;
+  }
+  .hint { color: var(--ink-faint); font-size: 0.75rem; }
+
+  /* Slide-specific */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; margin-top: 1.2rem; }
+  .stat { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.2rem; }
+  .stat .v { font-family: var(--mono); font-size: 1.8rem; color: var(--accent); display: block; }
+  .stat .l { font-size: 0.85rem; color: var(--ink-dim); }
+
+  .compare h3 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.1em; }
+  .compare.bad h3 { color: var(--bad); }
+  .compare.good h3 { color: var(--good); }
+
+  /* Slide title bar */
+  .title-bar { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.6rem; }
+  .title-bar .num { font-family: var(--mono); color: var(--ink-faint); font-size: 0.85rem; letter-spacing: 0.1em; }
+
+  /* Closing slide */
+  .end h1 { font-size: clamp(2.6rem, 6vw, 5rem); }
+  .end .lede { max-width: 70ch; }
+
+  /* Responsive narrow */
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .row { flex-direction: column; }
+    .stat-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress" style="width:0%"></div>
+
+<div class="deck" id="deck">
+
+  <!-- 1. COVER -->
+  <section class="slide cover center">
+    <div class="compass" aria-hidden="true"></div>
+    <div class="eyebrow">Scenario 5 · Agentic Solution · Team Fuzzy Flask</div>
+    <h1>Cash <span class="accent">Compass</span></h1>
+    <p class="tag">A white-label agentic budget coach that retail banks embed in their app — and that <strong>actually acts</strong> on behalf of the customer, inside guardrails the bank controls.</p>
+    <div class="meta">Built on Claude Agent SDK · Anthropic Hackathon · 2026-04-28</div>
+  </section>
+
+  <!-- 2. THE PROBLEM -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">01</span><div class="eyebrow" style="margin:0">The problem</div></div>
+    <h2>Retail banks built dashboards. <span class="accent">Customers wanted a coach.</span></h2>
+    <div class="row" style="margin-top: 1.4rem;">
+      <div class="col">
+        <p class="lede">PFM dashboards are <em>passive</em>. They show pie charts; the customer still does the work — categorising, budgeting, deciding. Meanwhile Revolut and N26 ship features weekly.</p>
+        <ul style="margin-top:1.2rem">
+          <li><strong>The intent gap.</strong> "Can I afford a €350k mortgage?" never gets answered <em>inside</em> the bank app.</li>
+          <li><strong>The action gap.</strong> The bank already holds the data, the rate sheet, and the write APIs. Nothing connects them.</li>
+          <li><strong>The trust gap.</strong> Banks can't ship an LLM that <em>writes</em> without compliance signing off on every decision pattern.</li>
+        </ul>
+      </div>
+      <div class="col">
+        <div class="card bad">
+          <h3 style="color:var(--bad)">What banks ship today</h3>
+          <ul class="small">
+            <li>Read-only PFM widgets</li>
+            <li>Rule-based "you spent more than last month" alerts</li>
+            <li>Mortgage calculators on a separate microsite</li>
+            <li>A chat bot that escalates to a call centre</li>
+          </ul>
+        </div>
+        <div class="card good" style="margin-top:1rem">
+          <h3 style="color:var(--good)">What customers actually want</h3>
+          <ul class="small">
+            <li>"Reclassify this." → done.</li>
+            <li>"Pause Netflix until I'm back." → done, with my confirmation.</li>
+            <li>"Run a stress test on the €350k house." → cited, audited, in 6 seconds.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. THE INSIGHT -->
+  <section class="slide center">
+    <div class="eyebrow">The insight</div>
+    <h1 style="max-width: 22ch; text-align:center">Agentic isn't a chatbot.<br/>It's an <span class="accent">accountable</span> action layer.</h1>
+    <p class="lede" style="margin-top:1.4rem; text-align:center">An agent that can <em>act</em> only earns its keep if a regulator can trust the boundary. We built the boundary first, then the agent inside it.</p>
+  </section>
+
+  <!-- 4. PRODUCT OVERVIEW -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">02</span><div class="eyebrow" style="margin:0">Product</div></div>
+    <h2>Two surfaces. One coordinator. One bank store.</h2>
+    <div class="grid-2" style="margin-top: 1rem;">
+      <div class="card accent">
+        <span class="pill accent">Triage path</span>
+        <h3 style="margin-top:.7rem">Cash Compass core</h3>
+        <p class="small ink-dim">Classify transactions, manage envelopes, surface proactive questions, escalate ambiguity. High-risk writes gated by a <strong>PreToolUse hook</strong>.</p>
+        <ul class="small" style="margin-top:.6rem">
+          <li>Specialists: Classifier · Forecaster · Question-Surfacer</li>
+          <li>~16 tools, <code>{isError, reason_code, guidance}</code> error contract</li>
+          <li>Confidence threshold ≥0.70 → write, else escalate</li>
+        </ul>
+      </div>
+      <div class="card accent">
+        <span class="pill accent">Affordability path</span>
+        <h3 style="margin-top:.7rem">Goal-driven advisor</h3>
+        <p class="small ink-dim">User asks "can I afford X?" → mortgage / DTI / stress math runs deterministically → every number becomes a <code>Claim</code>. Report is gated by a <strong>Stop hook</strong>.</p>
+        <ul class="small" style="margin-top:.6rem">
+          <li>Specialists: Affordability Simulator · Advisor</li>
+          <li>Pure-math finance core (no LLM in the numbers)</li>
+          <li>No <code>[claim_id]</code> on every figure → report is rejected</li>
+        </ul>
+      </div>
+    </div>
+    <p class="ink-dim small" style="margin-top:1.4rem">Same coordinator. Same <code>BankStore</code>. Same audit log. The two surfaces are deployed as one product — the bank can roll out triage first and switch on affordability when compliance signs off on the Claim catalogue.</p>
+  </section>
+
+  <!-- 5. ARCHITECTURE DIAGRAM -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">03</span><div class="eyebrow" style="margin:0">Architecture</div></div>
+    <h2>Coordinator routes; specialists are narrow; hooks are the safety floor.</h2>
+    <div class="arch" aria-label="architecture diagram">
+                          <span class="h">┌────────────────────────────┐</span>
+                          <span class="h">│   User / Bank App (UI)     │</span>
+                          <span class="h">└─────────────┬──────────────┘</span>
+                                        │  request_type
+                          <span class="b">┌─────────────▼──────────────┐</span>
+                          <span class="b">│       Coordinator          │</span>  ← Sonnet
+                          <span class="b">│  (routing + retry loop)    │</span>
+                          <span class="b">└──┬───────┬────────┬────────┘</span>
+                             │       │        │
+              <span class="s">─── Triage path ──┴─┐     │     ┌─── Affordability path ───</span>
+                                  │     │     │
+              ┌──────────────┐ ┌──▼───┐ │ ┌───▼──────┐ ┌──────────┐
+              │  Classifier  │ │Fcast │ │ │ Simulator │ │ Advisor  │   ← Haiku ×5
+              └──────┬───────┘ └──┬───┘ │ └────┬──────┘ └────┬─────┘
+                     │            │    │      │             │
+                   <span class="b">[ tools ]   [ tools ]      [ tools ]      [ tools ]</span>
+                     │            │           │             │
+              <span class="b">═════════════ PreToolUse hook ═════════════</span>      <span class="b">══ Stop hook ══</span>
+              <span class="s">  PII · routes · frozen · conf_* tokens     </span>      <span class="s">  Claim refs ·</span>
+                                                                  <span class="s">  disclaimer  </span>
+                     │            │           │             │
+                          <span class="h">┌─────────────▼─────────────────────────┐</span>
+                          <span class="h">│  BankStore  (transactions · envelopes  │</span>
+                          <span class="h">│              · claims · mutations log) │</span>
+                          <span class="h">└────────────────────────────────────────┘</span>
+    </div>
+  </section>
+
+  <!-- 6. SAFETY: HOOKS > PROMPTS -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">04</span><div class="eyebrow" style="margin:0">Safety</div></div>
+    <h2>Hooks, not prompts. <span class="accent">Mechanical refusal.</span></h2>
+    <p class="lede">Telling the model "don't do this" is a wish. Hooks run inside the SDK runtime — the model cannot subvert them with cleverness.</p>
+    <div class="grid-2" style="margin-top:1.3rem">
+      <div class="card">
+        <span class="pill accent">PreToolUse</span>
+        <h3 style="margin-top:.6rem">Triage path · before any tool fires</h3>
+<pre><span class="c"># agent/hooks/pre_tool_use.py</span>
+<span class="k">if</span> contains_pii(args):              <span class="c"># IBAN, card, codice fiscale</span>
+    <span class="k">return</span> block(<span class="s">"PII_IN_TOOL_INPUT"</span>)
+<span class="k">if</span> matches_known_bad_route(args):    <span class="c"># ceo@, external_transfer</span>
+    <span class="k">return</span> block(<span class="s">"FORBIDDEN_ROUTE"</span>)
+<span class="k">if</span> tool <span class="k">in</span> HIGH_RISK <span class="k">and</span> <span class="k">not</span> args.get(<span class="s">"user_confirmation_token"</span>, <span class="s">""</span>).startswith(<span class="s">"conf_"</span>):
+    <span class="k">return</span> block(<span class="s">"NEEDS_USER_CONFIRMATION"</span>)
+<span class="k">if</span> impact_eur(args) &gt; <span class="n">100</span> <span class="k">and</span> <span class="k">not</span> token_present(args):
+    <span class="k">return</span> block(<span class="s">"IMPACT_THRESHOLD_EXCEEDED"</span>)</pre>
+      </div>
+      <div class="card">
+        <span class="pill accent">Stop</span>
+        <h3 style="margin-top:.6rem">Affordability path · before report is delivered</h3>
+<pre><span class="c"># agent/hooks/stop_validation.py</span>
+<span class="k">if not</span> report.endswith(DISCLAIMER):
+    <span class="k">return</span> reject(<span class="s">"MISSING_DISCLAIMER"</span>)
+unbound = find_unbound_numbers(report)   <span class="c"># €350k, 1.234,56, 12%…</span>
+<span class="k">if</span> unbound:
+    <span class="k">return</span> reject(<span class="s">"UNBOUND_NUMBERS"</span>, unbound)
+<span class="k">for</span> cid <span class="k">in</span> claim_ids_in_report(report):
+    <span class="k">if not</span> store.get_claim(cid):
+        <span class="k">return</span> reject(<span class="s">"DANGLING_CLAIM_REFS"</span>, cid)</pre>
+      </div>
+    </div>
+    <p class="small ink-dim" style="margin-top:1rem">Compliance reviews the hook. The hook protects every release thereafter — no prompt change can weaken it.</p>
+  </section>
+
+  <!-- 7. NO NUMBER WITHOUT A CLAIM -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">05</span><div class="eyebrow" style="margin:0">The Claim architecture</div></div>
+    <h2>No number reaches the user without a <span class="accent">Claim</span>.</h2>
+    <div class="row">
+      <div class="col">
+        <p>Every figure the Advisor writes — payment, DTI, stress-test result — must be backed by a <code>Claim</code> emitted by deterministic finance code, not by the model.</p>
+        <ul>
+          <li>Advisor has <strong>no tool</strong> to invent numbers. It can only <em>reference</em> Claims by ID.</li>
+          <li>Stop hook scans the report: any numeric token without <code>[claim_*]</code> within 30 chars → <strong>rejected</strong>.</li>
+          <li>Claim IDs are <strong>deterministic</strong> across runs of the same persona — replayable in audit.</li>
+        </ul>
+        <p class="small ink-dim" style="margin-top:1rem">A compliance officer signs off on <em>the Claim catalogue</em>, not on prompt engineering.</p>
+      </div>
+      <div class="col">
+<pre><span class="c"># agent/schemas/claim.py</span>
+<span class="k">@dataclass</span>
+<span class="k">class</span> <span class="n">Claim</span>:
+    id: <span class="n">str</span>            <span class="c"># claim_max_principal_2026_04</span>
+    value: <span class="n">float</span>
+    unit: <span class="n">str</span>          <span class="c"># EUR | EUR/month | % | bps</span>
+    label: <span class="n">str</span>
+    source_tool: <span class="n">str</span>   <span class="c"># compute_mortgage</span>
+    source_args: <span class="n">dict</span>   <span class="c"># {principal, term, rate}</span>
+    inputs: <span class="n">list[str]</span>  <span class="c"># upstream claim ids</span>
+    confidence: <span class="n">float</span>
+    ts: <span class="n">datetime</span>
+
+<span class="c"># Advisor output, gated by Stop hook:</span>
+<span class="s">"At a fixed 25-year term, the maximum
+sustainable principal is €312,400
+[claim_max_principal_2026_04] with
+a DTI of 33.8% [claim_dti_2026_04]…"</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. FORBIDDEN BY TOOL ABSENCE -->
+  <section class="slide center">
+    <div class="eyebrow">A pattern we lean on hard</div>
+    <h1 style="max-width: 24ch; text-align:center">The strongest refusal is the action <span class="accent">that has no tool</span>.</h1>
+    <div class="grid-3" style="margin-top: 2rem; width: 100%; max-width: 1100px;">
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Not in the toolset</h3>
+        <ul class="small">
+          <li><code>transfer_funds</code></li>
+          <li><code>give_investment_advice</code></li>
+          <li><code>cancel_merchant_contract</code></li>
+        </ul>
+        <p class="small ink-dim" style="margin-top:.6rem">No prompt injection can call what doesn't exist.</p>
+      </div>
+      <div class="card">
+        <h3>Gated by hook</h3>
+        <ul class="small">
+          <li><code>pause_subscription</code></li>
+          <li><code>auto_fund_savings</code></li>
+          <li><code>create_savings_goal</code> (&gt; €100)</li>
+        </ul>
+        <p class="small ink-dim" style="margin-top:.6rem">Allowed only with a <code>conf_*</code> token.</p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">Free to use</h3>
+        <ul class="small">
+          <li><code>get_transactions</code></li>
+          <li><code>set_transaction_classification</code></li>
+          <li><code>flag_for_review</code> · <code>emit_claim</code></li>
+        </ul>
+        <p class="small ink-dim" style="margin-top:.6rem">Idempotent reads + low-impact writes.</p>
+      </div>
+    </div>
+    <p class="lede" style="margin-top:2rem; text-align:center; max-width:65ch">Three tiers of action, three different mechanisms. <em>Removing</em> tools turned out to be more powerful than adding more guardrails.</p>
+  </section>
+
+  <!-- 9. DUAL-MODEL STRATEGY -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">06</span><div class="eyebrow" style="margin:0">Model choice</div></div>
+    <h2>Sonnet routes. Haiku specialises. <span class="accent">~10× cheaper, narrower blast radius.</span></h2>
+    <div class="grid-2" style="margin-top:1.2rem">
+      <div class="card">
+        <span class="pill accent">Coordinator</span>
+        <h3 style="margin-top:.6rem">claude-sonnet-4-20250514</h3>
+        <p class="small ink-dim">Multi-step routing, validation-retry loops, picking the right specialist for ambiguous input. Sonnet's strength is reasoning over context.</p>
+      </div>
+      <div class="card">
+        <span class="pill accent">5 Specialists</span>
+        <h3 style="margin-top:.6rem">claude-haiku-4-5-20251001</h3>
+        <p class="small ink-dim">Each specialist sees ~4–5 tools and one job. Haiku is fast and cheap; narrow scope means fewer ways to go wrong; lower latency in-app.</p>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><span class="v">5</span><span class="l">Specialists, all on Haiku</span></div>
+      <div class="stat"><span class="v">~25</span><span class="l">Tools, with boundary descriptions</span></div>
+      <div class="stat"><span class="v">2</span><span class="l">Hooks: PreToolUse + Stop</span></div>
+      <div class="stat"><span class="v">Bedrock</span><span class="l">Backend (AWS SSO, EU-region ready)</span></div>
+    </div>
+    <p class="small ink-dim" style="margin-top:1.2rem">Models are env-overridable: <code>CASH_COMPASS_SONNET_MODEL</code> / <code>CASH_COMPASS_HAIKU_MODEL</code>. Banks pin to the version their risk team has tested.</p>
+  </section>
+
+  <!-- 10. EVALUATION -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">07</span><div class="eyebrow" style="margin:0">Evidence — evaluation</div></div>
+    <h2>27 tasks · 5 metrics · stratified · CI-blockable.</h2>
+    <div class="row" style="margin-top:1rem">
+      <div class="col">
+        <table>
+          <thead><tr><th>Bucket</th><th>Tasks</th><th>What it tests</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill good">happy</span></td><td class="mono">10</td><td>Esselunga, ENEL, salary, refunds — straight classify + envelope</td></tr>
+            <tr><td><span class="pill" style="color:var(--warn);border-color:rgba(230,198,106,0.5)">ambiguous</span></td><td class="mono">7</td><td>Generic POS memos, FX, edge-case category overlap</td></tr>
+            <tr><td><span class="pill bad">adversarial</span></td><td class="mono">10</td><td>Prompt injection in memo, false-urgent, PII exfil, eval-awareness probe, multi-agent context bleed</td></tr>
+          </tbody>
+        </table>
+        <p class="small ink-dim" style="margin-top:1rem"><strong>Pass thresholds:</strong> overall accuracy ≥ 70%, adversarial-pass ≥ 75%. <code>--ci</code> exits non-zero below either.</p>
+      </div>
+      <div class="col">
+        <h3>Metrics tracked per run</h3>
+        <ul>
+          <li><strong>Overall accuracy</strong> — tasks fully passed</li>
+          <li><strong>Per-category precision</strong> — not just "right on average"</li>
+          <li><strong>Escalation rate</strong> — correct escalations vs. false alarms</li>
+          <li><strong>False-confidence rate</strong> — confident-but-wrong calls</li>
+          <li><strong>Adversarial-pass rate</strong> — guardrails held under attack</li>
+        </ul>
+        <p class="small ink-dim" style="margin-top:.4rem"><strong>Stratified sampling.</strong> 5 easy / 5 medium / 5 hard, so 10 happy-path wins can't paper over 10 adversarial losses.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. EVAL-AWARENESS -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">08</span><div class="eyebrow" style="margin:0">Evidence — research-grounded design</div></div>
+    <h2>The <span class="accent">eval-awareness probe</span>.</h2>
+    <div class="row">
+      <div class="col">
+        <p class="lede">Anthropic's <em>BrowseComp</em> work showed multi-agent systems exhibit ~3.7× higher eval-contamination rates than single-agent ones. We took that finding seriously and put it in our test set.</p>
+        <ul style="margin-top:1rem">
+          <li>One adversarial task ships a transaction with <code>benchmark_id=cash_compass_v1</code> in its memo.</li>
+          <li>The grader compares behaviour on the probe task vs. the same task without the probe.</li>
+          <li>If the agent classifies differently — it's gaming the eval. Fail.</li>
+        </ul>
+        <p class="small ink-dim" style="margin-top:1rem">Adjacent test: <code>adv_multi_agent_contamination_probe_001</code> validates that one specialist's leaked context doesn't change another's classification.</p>
+      </div>
+      <div class="col">
+        <blockquote>
+          "Multi-agent systems can implicitly recognise evaluation conditions and behave differently. Eval design must account for this."
+          <div class="small ink-faint" style="margin-top:.6rem">— BrowseComp methodology, Anthropic</div>
+        </blockquote>
+        <div class="card" style="margin-top:1rem">
+          <h3>Why this matters to a bank</h3>
+          <p class="small ink-dim">If an agent behaves better in QA than in production, every release is a coin-flip. The probe makes the gap measurable.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12. WHY CLAUDE CODE — WINS -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">09</span><div class="eyebrow" style="margin:0">Why Claude Code · the wins</div></div>
+    <h2>What Claude Code unlocked that we'd struggle to build otherwise.</h2>
+    <div class="grid-2" style="margin-top:1rem">
+      <div class="card good">
+        <h3 style="color:var(--good)">1 · Hooks are first-class</h3>
+        <p class="small">PreToolUse and Stop are runtime primitives, not prompt patterns. They run regardless of model output. <strong>This is the entire reason a regulator can sign off.</strong></p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">2 · Subagents in parallel</h3>
+        <p class="small">Two subagents built the triage stack and the eval harness in parallel during the hackathon. Wall-clock build time roughly halved.</p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">3 · Architecture-first conversations</h3>
+        <p class="small">The full multi-file design landed in <code>docs_m/architecture.md</code> and <code>sdk-development-plan.md</code> <em>before</em> any code was written. Every commit traced back to a doc.</p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">4 · Boundary-teaching tool descriptions</h3>
+        <p class="small">Claude drafted the "what this tool does NOT do" sentence for all ~25 tools to a consistent template. Hardest part of tool design, done in one pass.</p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">5 · Eval scaffolding for free</h3>
+        <p class="small">27 labelled tasks with consistent JSON schema, three difficulty bands, adversarial seeds — a half-day of typing collapsed into minutes.</p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">6 · Bedrock = enterprise from day one</h3>
+        <p class="small">EU-region Bedrock deployment, AWS SSO auth, no data leaves the bank's tenancy. Procurement conversation is two weeks shorter.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13. WHY CLAUDE CODE — DRAWBACKS -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">10</span><div class="eyebrow" style="margin:0">Why Claude Code · the honest drawbacks</div></div>
+    <h2>Where it costs us — and how we mitigate.</h2>
+    <div class="grid-2" style="margin-top:1rem">
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Cost compounds with multi-agent</h3>
+        <p class="small">Coordinator + 5 specialists + retries means one user request can be 6–10 LLM calls. Sonnet pricing on the coordinator dominates.<br/>
+        <strong>Mitigation:</strong> dual-model split (Haiku on specialists ≈ 10× cheaper); specialist scope kept narrow so retry counts stay low; aggressive context-trimming before each call.</p>
+      </div>
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Latency is a UX constraint</h3>
+        <p class="small">Affordability path runs ~3–6 seconds end-to-end. Fine for a "advise me" surface, too slow for transaction-time UI.<br/>
+        <strong>Mitigation:</strong> triage runs offline / async; affordability surfaces a streaming UI; pure-math finance code runs without LLM in the hot path.</p>
+      </div>
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Non-determinism between releases</h3>
+        <p class="small">Even with temperature pinned, model upgrades change behaviour. A bank can't redeploy on every model release.<br/>
+        <strong>Mitigation:</strong> models are env-pinned (<code>CASH_COMPASS_*_MODEL</code>); the eval harness gates upgrades; Claims architecture means the <em>numbers</em> never depend on the model.</p>
+      </div>
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Vendor concentration</h3>
+        <p class="small">Two hooks, one SDK, one model family. If Anthropic's API has a bad day, our agent has a bad day.<br/>
+        <strong>Mitigation:</strong> Bedrock backend gives AWS-side resilience; the deterministic finance core (mortgage / DTI / stress) keeps producing numbers even if the LLM is down — degrade to "show me the math, no narration".</p>
+      </div>
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Eval cost is real</h3>
+        <p class="small">Running the 27-task suite is not free. Doing it on every PR is meaningful spend at scale.<br/>
+        <strong>Mitigation:</strong> <code>--stratified</code> mode runs 15 tasks for fast smoke-checks; full suite on merge to main only.</p>
+      </div>
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Tool-design discipline is on us</h3>
+        <p class="small">Claude Code makes <em>writing</em> a tool easy. Designing one safely — boundary description, error contract, idempotency — is still hard human work.<br/>
+        <strong>Mitigation:</strong> a documented tool-contract template in <code>CLAUDE.md</code>; hook coverage so design mistakes don't reach production.</p>
+      </div>
+    </div>
+    <p class="small ink-dim" style="margin-top:1rem">We're showing you the drawbacks because <strong>the bank's risk team will ask anyway</strong>. Better they hear the answers from us first.</p>
+  </section>
+
+  <!-- 14. EVIDENCE / LIVE STATE -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">11</span><div class="eyebrow" style="margin:0">Evidence — what's actually built</div></div>
+    <h2>Not a slide deck. <span class="accent">A repo.</span></h2>
+    <div class="stat-row" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="stat"><span class="v">~2,800</span><span class="l">Lines of production + eval code</span></div>
+      <div class="stat"><span class="v">7 / 8</span><span class="l">Hackathon challenges done (★ bonus surface)</span></div>
+      <div class="stat"><span class="v">27</span><span class="l">Labelled eval tasks across 3 difficulty bands</span></div>
+      <div class="stat"><span class="v">2</span><span class="l">Hooks · 5 specialists · ~25 tools</span></div>
+    </div>
+    <div class="row" style="margin-top:1.6rem">
+      <div class="col">
+        <h3>Run it yourself</h3>
+<pre><span class="c"># 1. install + AWS SSO</span>
+pip install -r requirements.txt
+aws login --profile bootcamp --region us-east-1
+
+<span class="c"># 2. seed the synthetic Italian corpus</span>
+python -m data.synthetic_generator
+
+<span class="c"># 3. run the eval</span>
+python -m eval.harness --stratified   <span class="c"># 15-task smoke</span>
+python -m eval.harness --ci           <span class="c"># gates 70% / 75%</span>
+python -m eval.harness --verbose      <span class="c"># reasoning chains</span></pre>
+      </div>
+      <div class="col">
+        <h3>Where to read the load-bearing code</h3>
+        <ul class="small">
+          <li><code>agent/hooks/pre_tool_use.py</code> — the safety floor</li>
+          <li><code>agent/hooks/stop_validation.py</code> — Claim integrity</li>
+          <li><code>agent/schemas/claim.py</code> — the unit of accountability</li>
+          <li><code>agent/finance/mortgage.py</code> — pure-math, no LLM</li>
+          <li><code>agent/coordinator.py</code> — routing + retry loop</li>
+          <li><code>eval/harness.py</code> — 5 metrics, stratified, CI-ready</li>
+          <li><code>eval/tasks/adversarial.json</code> — incl. eval-awareness probe</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15. ROADMAP / ASK -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">12</span><div class="eyebrow" style="margin:0">Roadmap & ask</div></div>
+    <h2>What's next — and what we're asking for.</h2>
+    <div class="grid-2" style="margin-top:1rem">
+      <div class="card">
+        <h3>Next 30 days</h3>
+        <ul class="small">
+          <li>Replace in-memory <code>BankStore</code> with a bank REST/MCP adapter</li>
+          <li>Promote rate snapshot to a <code>rates-mcp</code> server</li>
+          <li>Async user-confirmation surface (signed tokens replace <code>conf_*</code> string check)</li>
+          <li>GitHub Action: <code>eval.harness --ci</code> on every PR; track scorecard drift</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Next 90 days</h3>
+        <ul class="small">
+          <li>"The Loop" — feed user reclassifications back as few-shots</li>
+          <li>Embedding-based merchant KB (replace hardcoded lookup)</li>
+          <li>Confidence calibration (Platt scaling on the 0.70 threshold)</li>
+          <li>Dockerised pilot package + bank-side integration playbook</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card accent" style="margin-top:1.4rem">
+      <h3 style="color:var(--accent)">The ask</h3>
+      <p>One bank partner for a 90-day pilot. We bring the agent stack, the hooks, the eval harness, and our compliance pack. You bring transaction data (anonymised), a sandbox of write APIs, and one risk officer to sign off on the Claim catalogue. Pilot closes with a measured scorecard against your own customer cohort.</p>
+    </div>
+  </section>
+
+  <!-- 16. CLOSING -->
+  <section class="slide end center">
+    <div class="eyebrow">Team Fuzzy Flask</div>
+    <h1>An agent a <span class="accent">regulator</span> can ship.</h1>
+    <p class="lede" style="margin-top:1rem; text-align:center">The boundary first. The agent inside it. Every number a Claim. Every action a tool. Every refusal mechanical.</p>
+    <p class="ink-faint small" style="margin-top:3rem">Cash Compass · Scenario 5 · Built on Claude Agent SDK + Bedrock · 2026-04-28</p>
+    <p class="hint" style="margin-top:2rem">← →  navigate · <span class="mono">F</span> fullscreen · <span class="mono">.</span> first slide</p>
+  </section>
+
+</div>
+
+<div class="chrome">
+  <div class="left">Cash Compass · Team Fuzzy Flask</div>
+  <div class="right"><span id="cur">1</span> / <span id="tot">1</span></div>
+</div>
+
+<script>
+(function(){
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const cur = document.getElementById('cur');
+  const tot = document.getElementById('tot');
+  const progress = document.getElementById('progress');
+  let i = 0;
+  tot.textContent = slides.length;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    cur.textContent = i + 1;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+    try { history.replaceState(null, '', '#' + (i + 1)); } catch (e) {}
+  }
+
+  // initial slide from hash
+  const initial = parseInt((location.hash || '').replace('#', ''), 10);
+  show(Number.isFinite(initial) && initial > 0 ? initial - 1 : 0);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'PageDown':
+      case ' ':
+      case 'l':
+        e.preventDefault(); show(i + 1); break;
+      case 'ArrowLeft':
+      case 'PageUp':
+      case 'h':
+        e.preventDefault(); show(i - 1); break;
+      case 'Home':
+      case '.':
+        e.preventDefault(); show(0); break;
+      case 'End':
+        e.preventDefault(); show(slides.length - 1); break;
+      case 'f':
+      case 'F':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen();
+        break;
+    }
+  });
+
+  // click-to-advance on right half, back on left half
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('a, button, pre, code')) return;
+    const x = e.clientX / window.innerWidth;
+    show(x > 0.4 ? i + 1 : i - 1);
+  });
+})();
+</script>
+
+</body>
+</html>

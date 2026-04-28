@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cash Compass — Team Fuzzy Flask</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --bg-2: #11151a;
+    --ink: #e8eaed;
+    --ink-dim: #9aa3ad;
+    --ink-faint: #5d6770;
+    --line: #1f262e;
+    --accent: #d97757;
+    --accent-2: #f0a07a;
+    --good: #7cc594;
+    --warn: #e6c66a;
+    --bad: #e07a7a;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); height: 100%; overflow: hidden; }
+
+  /* Deck */
+  .deck { width: 100vw; height: 100vh; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none !important;
+    padding: 7vh 8vw 9vh;
+    overflow: auto;
+  }
+  .slide.active {
+    display: flex !important;
+    flex-direction: column;
+    animation: fade .35s ease-out;
+  }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Type */
+  h1 { font-size: clamp(2.6rem, 5.6vw, 5rem); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 1rem; font-weight: 700; }
+  h2 { font-size: clamp(1.8rem, 3.2vw, 2.6rem); line-height: 1.15; letter-spacing: -0.015em; margin: 0 0 1.6rem; font-weight: 650; }
+  h3 { font-size: 1.15rem; margin: 0 0 .5rem; color: var(--ink); font-weight: 600; }
+  p, li { font-size: clamp(1.05rem, 1.35vw, 1.3rem); line-height: 1.55; color: var(--ink); }
+  .lede { font-size: clamp(1.2rem, 1.7vw, 1.55rem); color: var(--ink-dim); max-width: 60ch; line-height: 1.45; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-bottom: 1.2rem; }
+  strong { color: var(--ink); font-weight: 650; }
+  ul { padding-left: 1.2rem; margin: 0; }
+  li { margin-bottom: .6rem; }
+  .accent { color: var(--accent); }
+  .ink-dim { color: var(--ink-dim); }
+  .ink-faint { color: var(--ink-faint); }
+  .small { font-size: 0.95rem; }
+
+  /* Layout */
+  .row { display: flex; gap: 2.4rem; align-items: stretch; }
+  .col { flex: 1; min-width: 0; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6rem; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.8rem; }
+
+  .slide.center { align-items: center; justify-content: center; text-align: center; }
+
+  /* Cards */
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1.5rem 1.6rem;
+  }
+  .card.accent { border-color: rgba(217,119,87,0.40); }
+  .card.good { border-color: rgba(124,197,148,0.32); }
+  .card.bad { border-color: rgba(224,122,122,0.32); }
+  .card .num { font-family: var(--mono); font-size: 2rem; color: var(--accent); display: block; margin-bottom: .4rem; line-height: 1; }
+  .card .lab { font-size: 0.9rem; color: var(--ink-dim); }
+
+  /* Cover */
+  .cover { background: radial-gradient(1200px 600px at 30% 20%, rgba(217,119,87,0.10), transparent 60%); }
+  .cover h1 { font-size: clamp(3.6rem, 8vw, 6.8rem); }
+  .cover .tag { font-size: clamp(1.15rem, 1.6vw, 1.45rem); color: var(--ink-dim); margin-top: 1rem; max-width: 56ch; }
+  .cover .meta { margin-top: 3rem; color: var(--ink-faint); font-size: 0.95rem; letter-spacing: 0.04em; }
+  .cover .compass {
+    width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--accent);
+    position: relative; margin-bottom: 2rem;
+    background: radial-gradient(circle at 50% 50%, rgba(217,119,87,0.18), transparent 70%);
+  }
+  .cover .compass::before {
+    content: ''; position: absolute; left: 50%; top: 8px; bottom: 8px; width: 2px;
+    background: linear-gradient(to bottom, var(--accent) 0 50%, var(--ink-faint) 50% 100%);
+    transform: translateX(-50%) rotate(28deg); transform-origin: 50% 50%;
+  }
+  .cover .compass::after {
+    content: 'N'; position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    color: var(--accent); font-size: 0.78rem; letter-spacing: 0.2em;
+  }
+
+  /* Big number stat */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; margin-top: 1.4rem; }
+  .stat { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem 1.5rem; }
+  .stat .v { font-family: var(--mono); font-size: clamp(1.7rem, 2.6vw, 2.4rem); color: var(--accent); display: block; line-height: 1; margin-bottom: .5rem; }
+  .stat .l { font-size: 0.95rem; color: var(--ink-dim); line-height: 1.4; }
+
+  /* Title bar */
+  .title-bar { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.6rem; }
+  .title-bar .num { font-family: var(--mono); color: var(--ink-faint); font-size: 0.85rem; letter-spacing: 0.1em; }
+
+  /* Chrome */
+  .chrome {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.7rem 1.2rem; font-size: 0.78rem; color: var(--ink-faint);
+    font-family: var(--mono); pointer-events: none;
+  }
+  .chrome .left { letter-spacing: 0.15em; text-transform: uppercase; }
+  .progress {
+    position: fixed; left: 0; top: 0; height: 2px; background: var(--accent);
+    transition: width .35s ease-out; z-index: 10;
+  }
+
+  /* Quote */
+  blockquote {
+    margin: 0; padding: 1rem 1.4rem; border-left: 3px solid var(--accent);
+    color: var(--ink); font-size: 1.15rem; line-height: 1.6; background: rgba(217,119,87,0.04);
+  }
+
+  /* Pills */
+  .pill { display: inline-block; padding: 0.2rem 0.6rem; border: 1px solid var(--line); border-radius: 999px; font-size: 0.78rem; color: var(--ink-dim); margin-right: .3rem; }
+  .pill.accent { border-color: rgba(217,119,87,0.5); color: var(--accent); }
+  .pill.good { border-color: rgba(124,197,148,0.5); color: var(--good); }
+  .pill.bad { border-color: rgba(224,122,122,0.5); color: var(--bad); }
+
+  /* Day-in-life timeline */
+  .timeline { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1.4rem; }
+  .moment { display: grid; grid-template-columns: 110px 1fr; gap: 1.4rem; align-items: start; padding: 1rem 1.2rem; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--bg-2); }
+  .moment .when { font-family: var(--mono); color: var(--accent); font-size: 0.92rem; letter-spacing: 0.06em; padding-top: 0.15rem; }
+  .moment .what { font-size: 1.02rem; line-height: 1.5; }
+  .moment .what strong { color: var(--ink); }
+  .moment .what em { color: var(--ink-dim); font-style: normal; display: block; margin-top: .25rem; font-size: 0.92rem; }
+
+  /* Outcome grid */
+  .outcomes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; margin-top: 1.4rem; }
+  .outcome { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem 1.3rem; }
+  .outcome .v { font-family: var(--mono); font-size: clamp(1.5rem, 2.2vw, 2rem); color: var(--accent); display: block; line-height: 1; margin-bottom: .55rem; }
+  .outcome h3 { font-size: 1rem; margin: 0 0 .35rem; }
+  .outcome p { font-size: 0.92rem; color: var(--ink-dim); line-height: 1.45; margin: 0; }
+
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .stats, .outcomes { grid-template-columns: 1fr; }
+    .row { flex-direction: column; }
+    .moment { grid-template-columns: 1fr; gap: .4rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress" style="width:0%"></div>
+
+<div class="deck" id="deck">
+
+  <!-- 1. COVER -->
+  <section class="slide cover center">
+    <div class="compass" aria-hidden="true"></div>
+    <div class="eyebrow">Team Ctrl+Claude · For Retail Banks</div>
+    <h1>Cash <span class="accent">Compass</span></h1>
+    <p class="tag">The agentic budget coach you can actually ship.</p>
+    <div class="meta">A 5-minute pitch · 2026</div>
+  </section>
+
+  <!-- 2. THE PROBLEM -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">01</span><div class="eyebrow" style="margin:0">The problem</div></div>
+    <h2>Your customers want a coach. <span class="accent">You're shipping a dashboard.</span></h2>
+    <p class="lede">Revolut and N26 are winning the next generation by making the app <em>do things</em>. Your PFM widgets show pie charts. The customer still does the work.</p>
+    <div class="stats" style="margin-top: 2.4rem">
+      <div class="stat"><span class="v">~30%</span><span class="l">of under-35s now hold a fintech-primary account</span></div>
+      <div class="stat"><span class="v">3 apps</span><span class="l">the average customer juggles to do basic budgeting</span></div>
+      <div class="stat"><span class="v">€0</span><span class="l">ROI on AI features that compliance won't approve</span></div>
+    </div>
+    <p class="ink-dim small" style="margin-top: 1.8rem">You already hold the data, the rate sheet, and the write APIs. Nothing connects them into a customer outcome.</p>
+  </section>
+
+  <!-- 3. THE PRODUCT -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">02</span><div class="eyebrow" style="margin:0">The product</div></div>
+    <h2>Cash Compass embeds in your app and <span class="accent">does the work</span> for the customer.</h2>
+    <div class="grid-3" style="margin-top: 1.4rem">
+      <div class="card accent">
+        <h3>Cleans up their money</h3>
+        <p class="small ink-dim">Categorises every transaction, adjusts monthly budgets as habits change, and quietly surfaces the subscription nobody's used in three months.</p>
+      </div>
+      <div class="card accent">
+        <h3>Answers the big questions</h3>
+        <p class="small ink-dim">"Can I afford a €350k mortgage?" "What if rates go up 200 bps?" Stress-tested in seconds, with every figure traceable to its source.</p>
+      </div>
+      <div class="card accent">
+        <h3>Acts only when allowed</h3>
+        <p class="small ink-dim">Anything that moves real money asks for confirmation first. Anything risky is blocked before the agent can even try.</p>
+      </div>
+    </div>
+    <p class="ink-dim small" style="margin-top: 1.4rem">White-label · embedded in your app · your branding · your tenancy. The customer never leaves your channel.</p>
+  </section>
+
+  <!-- 4. A DAY WITH CASH COMPASS -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">03</span><div class="eyebrow" style="margin:0">A day with Cash Compass</div></div>
+    <h2>What it actually feels like for <span class="accent">Marco, 34, your customer.</span></h2>
+    <div class="timeline">
+      <div class="moment">
+        <div class="when">08:14 · MON</div>
+        <div class="what"><strong>Rent posts. Already classified, envelope already adjusted.</strong>
+          <em>No notification, no friction — the boring stuff just happens.</em></div>
+      </div>
+      <div class="moment">
+        <div class="when">13:02 · MON</div>
+        <div class="what"><strong>"PAGAMENTO POS 04/15 €38,40" — was that lunch or groceries?</strong>
+          <em>Cash Compass asks once, learns the merchant, never asks again.</em></div>
+      </div>
+      <div class="moment">
+        <div class="when">17:30 · WED</div>
+        <div class="what"><strong>"You haven't used Disney+ in 94 days. Pause it?"</strong>
+          <em>One tap. Marco saves €107/year. Confirmation token gates the action — no surprise charges, ever.</em></div>
+      </div>
+      <div class="moment">
+        <div class="when">21:00 · SAT</div>
+        <div class="what"><strong>"Can I afford that €350k flat in Navigli?"</strong>
+          <em>Six seconds later: a stress-tested affordability report. Every number cited. Disclaimer included. Marco knows what to ask his broker.</em></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. WHAT IT MEANS FOR THE BANK -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">04</span><div class="eyebrow" style="margin:0">What it means for the bank</div></div>
+    <h2>One product, <span class="accent">four levers</span> on the P&amp;L.</h2>
+    <div class="outcomes">
+      <div class="outcome">
+        <span class="v">↑ Retention</span>
+        <h3>Daily-active feature</h3>
+        <p>A coach customers open every day is a primary-account feature. Switching costs go up.</p>
+      </div>
+      <div class="outcome">
+        <span class="v">↑ NPS</span>
+        <h3>Proactive value</h3>
+        <p>The bank surfaces the saved subscription, the over-budget envelope, the better mortgage moment. Customers feel served.</p>
+      </div>
+      <div class="outcome">
+        <span class="v">↑ Cross-sell</span>
+        <h3>Right moment, right product</h3>
+        <p>The agent already knows when a savings goal becomes realistic, or when a mortgage conversation makes sense.</p>
+      </div>
+      <div class="outcome">
+        <span class="v">↓ Cost-to-serve</span>
+        <h3>Deflects routine tickets</h3>
+        <p>"Why was I charged?" / "How do I cancel this?" / "Can I afford…?" — the long tail of contact-centre volume.</p>
+      </div>
+    </div>
+    <p class="ink-dim small" style="margin-top: 1.4rem">Pilot scorecard measures all four against your own customer cohort. No theatre — your data, your numbers.</p>
+  </section>
+
+  <!-- 4. SAFE BY DESIGN -->
+  <section class="slide center">
+    <div class="eyebrow">Why your risk team will actually approve it</div>
+    <h1 style="max-width: 22ch">Compliance signs off <span class="accent">once</span>.<br/>The boundary holds <span class="accent">forever</span>.</h1>
+    <p class="lede" style="margin-top: 1.6rem; max-width: 64ch">Most "AI agents" rely on telling the model not to do things. Ours <strong>cannot</strong> do them. Dangerous actions don't exist as options. Risky ones are gated by code your team controls — not by a prompt the model can talk its way around.</p>
+    <p class="ink-dim small" style="margin-top: 2rem; max-width: 60ch">Every number the customer sees is auditable back to its source. Hallucinated figures are mechanically rejected before they reach the screen.</p>
+  </section>
+
+  <!-- 7. WHY CLAUDE CODE — WINS -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">05</span><div class="eyebrow" style="margin:0">Why we built it on Claude</div></div>
+    <h2>Three things Claude does that nothing else does as well.</h2>
+    <div class="grid-3" style="margin-top: 1.6rem">
+      <div class="card good">
+        <h3 style="color:var(--good)">Built-in safety controls</h3>
+        <p class="small ink-dim">Anthropic's runtime gives us hard guardrails the model cannot bypass — the foundation that makes a regulator-ready agent possible at all.</p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">Enterprise-ready on day one</h3>
+        <p class="small ink-dim">Available through AWS Bedrock in EU regions. Your customer data stays in your AWS tenancy. Procurement and DPIA pre-cleared.</p>
+      </div>
+      <div class="card good">
+        <h3 style="color:var(--good)">A shorter path to production</h3>
+        <p class="small ink-dim">We built a working agent with a full evaluation harness in a single day. That's not just a hackathon stunt — it's how fast you'd iterate post-pilot.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. WHY CLAUDE CODE — HONEST TRADEOFFS -->
+  <section class="slide">
+    <div class="title-bar"><span class="num">06</span><div class="eyebrow" style="margin:0">Where it costs us — honestly</div></div>
+    <h2>Three trade-offs you should know before you sign.</h2>
+    <div class="grid-3" style="margin-top: 1.6rem">
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Per-call cost is real</h3>
+        <p class="small ink-dim">A premium model isn't free. We mitigate by using a smaller, cheaper model for ~80% of the work — only the orchestrator pays premium pricing.</p>
+      </div>
+      <div class="card bad">
+        <h3 style="color:var(--bad)">Latency is a UX constraint</h3>
+        <p class="small ink-dim">Heavy answers take 3–6 seconds. Fine for "advise me", too slow for transaction-time UI. We design around it: streaming responses, async cleanup tasks.</p>
+      </div>
+      <div class="card bad">
+        <h3 style="color:var(--bad)">One vendor, one model family</h3>
+        <p class="small ink-dim">If Anthropic has a bad day, we have a bad day. Bedrock provides AWS-side resilience; the math behind affordability still runs even if the model is offline.</p>
+      </div>
+    </div>
+    <p class="ink-dim small" style="margin-top: 1.6rem">We're showing you these because <strong>your risk team will ask anyway</strong>. Better the answers come from us first.</p>
+  </section>
+
+  <!-- 7. THE ASK -->
+  <section class="slide center">
+    <div class="eyebrow">The ask</div>
+    <h1 style="max-width: 20ch">A <span class="accent">90-day pilot.</span><br/>One bank. One cohort. One scorecard.</h1>
+    <p class="lede" style="margin-top: 1.6rem; max-width: 60ch">We bring the agent, the safety controls, and the evaluation framework. You bring an anonymised customer cohort and a sandbox. We close the pilot with measured outcomes against your own data.</p>
+    <p class="ink-faint small" style="margin-top: 3rem">Cash Compass · Team Fuzzy Flask · 2026</p>
+  </section>
+
+</div>
+
+<div class="chrome">
+  <div class="left">Cash Compass</div>
+  <div class="right"><span id="cur">1</span> / <span id="tot">1</span></div>
+</div>
+
+<script>
+(function(){
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const cur = document.getElementById('cur');
+  const tot = document.getElementById('tot');
+  const progress = document.getElementById('progress');
+  let i = 0;
+  tot.textContent = slides.length;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    cur.textContent = i + 1;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+    try { history.replaceState(null, '', '#' + (i + 1)); } catch (e) {}
+  }
+
+  const initial = parseInt((location.hash || '').replace('#', ''), 10);
+  show(Number.isFinite(initial) && initial > 0 ? initial - 1 : 0);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': case ' ': case 'l':
+        e.preventDefault(); show(i + 1); break;
+      case 'ArrowLeft': case 'PageUp': case 'h':
+        e.preventDefault(); show(i - 1); break;
+      case 'Home': case '.':
+        e.preventDefault(); show(0); break;
+      case 'End':
+        e.preventDefault(); show(slides.length - 1); break;
+      case 'f': case 'F':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen();
+        break;
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('a, button')) return;
+    const x = e.clientX / window.innerWidth;
+    show(x > 0.4 ? i + 1 : i - 1);
+  });
+})();
+</script>
+
+</body>
+</html>
