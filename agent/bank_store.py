@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from agent.schemas.claim import Claim
+
 
 @dataclass
 class Transaction:
@@ -77,6 +79,9 @@ class BankStore:
             "auto_classify_threshold": 0.85,
             "escalation_threshold_eur": 100.0,
         }
+        # Affordability-mode: session-scoped Claim store.
+        # Coordinator + Advisor share these refs; the Stop hook validates Claim integrity.
+        self.claims: dict[str, Claim] = {}
         self._mutation_log: list[dict] = []
 
     def load_state(self, state: dict) -> None:
@@ -166,3 +171,24 @@ class BankStore:
         self._log("fund", "savings_goals", goal_id, {"amount": amount, "source": source_account})
         return {"funded": True, "goal_id": goal_id,
                 "new_balance": self.savings_goals[goal_id].current_amount}
+
+    # --- Affordability advisor: Claim emission and lookup ---
+
+    def emit_claim(self, claim: Claim) -> Claim:
+        """Register a Claim in the session-scoped store. Idempotent on `id`.
+
+        Affordability simulator emits these as it runs scenarios; Advisor reads
+        them when composing the final report. Stop hook validates that every
+        number in the report is bound to a Claim ID.
+        """
+        self.claims[claim.id] = claim
+        self._log("emit", "claims", claim.id, claim.to_dict())
+        return claim
+
+    def get_claim(self, claim_id: str) -> Claim | None:
+        return self.claims.get(claim_id)
+
+    def list_claims(self, label_prefix: str | None = None) -> list[Claim]:
+        if label_prefix is None:
+            return list(self.claims.values())
+        return [c for c in self.claims.values() if c.label.startswith(label_prefix)]

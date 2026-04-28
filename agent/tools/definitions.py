@@ -304,3 +304,170 @@ QUESTION_SURFACER_TOOLS = [
         }
     }
 ]
+
+
+# --------------------------------------------------------------------------
+# AFFORDABILITY ADVISOR TOOLS
+# Two specialists:
+#   - AffordabilitySimulator (uses SIMULATOR_TOOLS) — runs scenarios, emits Claims
+#   - Advisor                 (uses ADVISOR_TOOLS) — reads Claims, composes report
+# Tools follow the same conventions as Cash Compass tools (boundary-teaching
+# descriptions, structured errors). Numbers MUST be emitted as Claims so the
+# Stop hook can validate the final report.
+# --------------------------------------------------------------------------
+
+SIMULATOR_TOOLS = [
+    {
+        "name": "get_user_income_summary",
+        "description": (
+            "Read the user's recent income profile: avg monthly income, stability score, last 6 months totals. "
+            "Computed from the bank store's salary/income classifications. "
+            "Does NOT include investment returns. "
+            "Does NOT forecast future income. "
+            "Returns {monthly_income_eur, stability_score, months_observed, last_six_months_eur[]}."
+        ),
+        "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "get_user_recurring_burden",
+        "description": (
+            "Read the user's recurring monthly debits (essential + cuttable, excluding discretionary). "
+            "Used as the existing-debt baseline before adding a new mortgage. "
+            "Does NOT include one-off transactions. "
+            "Does NOT decide what to cut — just measures. "
+            "Returns {total_monthly_eur, breakdown: {category: monthly_eur}}."
+        ),
+        "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "get_rate_snapshot",
+        "description": (
+            "Get the current rate environment: spot EURIBOR + fixed-rate term structure + bank margin. "
+            "Spot snapshot only — does NOT forecast forward curves. "
+            "All forward-looking advice MUST be stress-tested. "
+            "Returns {spot_euribor_pct, term_structure: {term_years: rate_pct}, bank_margin_bps_default, snapshot_date, disclaimer}."
+        ),
+        "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "compute_mortgage_scenario",
+        "description": (
+            "Compute monthly payment + total interest for a mortgage scenario. "
+            "Use type='fixed' with the rate from term_structure, or type='variable_euribor' with spot + margin. "
+            "Does NOT advise on which type to pick — that's the Advisor's job. "
+            "Does NOT issue any Claim — to record the result, call emit_claim afterwards. "
+            "Returns {monthly_payment_eur, total_interest_eur, total_paid_eur, rate_pct, term_years, type, margin_bps}."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "principal_eur": {"type": "number"},
+                "rate_pct": {"type": "number"},
+                "term_years": {"type": "integer"},
+                "type": {"type": "string", "description": "fixed|variable_euribor"},
+                "margin_bps": {"type": "integer", "description": "Bank margin over EURIBOR; only for variable_euribor", "default": 0}
+            },
+            "required": ["principal_eur", "rate_pct", "term_years", "type"]
+        }
+    },
+    {
+        "name": "compute_dti_scenario",
+        "description": (
+            "Compute debt-to-income ratio for a scenario. "
+            "monthly_debt_eur should include the prospective new mortgage payment plus any existing recurring debt. "
+            "Does NOT issue any Claim — to record the result, call emit_claim afterwards. "
+            "Returns {dti_ratio, monthly_income_eur, monthly_debt_eur, headroom_eur, recommended_max_dti}."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "monthly_income_eur": {"type": "number"},
+                "monthly_debt_eur": {"type": "number"},
+                "recommended_max_dti": {"type": "number", "default": 0.36}
+            },
+            "required": ["monthly_income_eur", "monthly_debt_eur"]
+        }
+    },
+    {
+        "name": "stress_test_scenario",
+        "description": (
+            "Re-evaluate a mortgage scenario under rate or income shock. "
+            "Use to test whether the user 'survives' a +200bps rate rise or a 20% income drop. "
+            "Does NOT issue any Claim — to record the result, call emit_claim afterwards. "
+            "Returns {scenario_label, rate_shock_bps, income_shock_pct, stressed_monthly_payment_eur, stressed_dti, survives, headroom_after_shock_eur}."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "principal_eur": {"type": "number"},
+                "base_rate_pct": {"type": "number"},
+                "term_years": {"type": "integer"},
+                "type": {"type": "string", "description": "fixed|variable_euribor"},
+                "monthly_income_eur": {"type": "number"},
+                "other_monthly_debt_eur": {"type": "number", "default": 0.0},
+                "rate_shock_bps": {"type": "integer", "default": 0},
+                "income_shock_pct": {"type": "number", "default": 0.0},
+                "label": {"type": "string"}
+            },
+            "required": ["principal_eur", "base_rate_pct", "term_years", "type", "monthly_income_eur"]
+        }
+    },
+    {
+        "name": "emit_claim",
+        "description": (
+            "Record a numeric assertion as a Claim with full provenance. "
+            "Every number that will appear in the final advisor report MUST be a Claim. "
+            "The Advisor cannot invent numbers — it can only reference Claim IDs you create here. "
+            "Use stable IDs of the form 'claim_<label>_<period>' so references are deterministic across runs. "
+            "Returns {success: true, claim_id} or {isError: true, reason_code, guidance}."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Stable claim id, e.g. claim_max_principal_2026_04"},
+                "value": {"type": "number"},
+                "unit": {"type": "string", "description": "EUR | EUR/month | % | bps | ratio"},
+                "label": {"type": "string", "description": "Human-readable label, e.g. max_affordable_principal"},
+                "source_tool": {"type": "string", "description": "Tool that produced this number (compute_mortgage_scenario etc.)"},
+                "source_args": {"type": "object", "description": "Args you passed to the source tool"},
+                "inputs": {"type": "array", "items": {"type": "string"}, "description": "Other claim ids this depends on"},
+                "confidence": {"type": "number", "description": "0..1; lower for stress scenarios with shocks", "default": 1.0}
+            },
+            "required": ["id", "value", "unit", "label", "source_tool"]
+        }
+    }
+]
+
+
+ADVISOR_TOOLS = [
+    {
+        "name": "list_claims",
+        "description": (
+            "List all Claims emitted in this session. "
+            "Use to discover what numbers are available to cite in the report. "
+            "You CANNOT cite a number that is not in this list. "
+            "Returns {claims: [{id, value, unit, label, source_tool, confidence, ts}]}."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "label_prefix": {"type": "string", "description": "Optional filter by label prefix"}
+            }
+        }
+    },
+    {
+        "name": "get_claim",
+        "description": (
+            "Get full provenance for a single Claim by id. "
+            "Use to inspect the source_tool, source_args, inputs (dependent claims), and confidence. "
+            "Returns {claim} or {isError: true, reason_code: 'CLAIM_NOT_FOUND'}."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "claim_id": {"type": "string"}
+            },
+            "required": ["claim_id"]
+        }
+    }
+]

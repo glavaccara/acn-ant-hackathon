@@ -4,7 +4,10 @@ from datetime import datetime
 from typing import Any
 
 from agent.bank_store import BankStore
+from agent.finance import mortgage as mortgage_math
+from agent.finance import rates as rates_source
 from agent.hooks.pre_tool_use import pre_tool_use_hook
+from agent.schemas.claim import Claim
 
 # In-memory category knowledge base (production: ML model or lookup service)
 CATEGORY_KB: dict[str, dict] = {
@@ -77,6 +80,16 @@ def _dispatch(tool_name: str, inp: dict, store: BankStore) -> dict:
         "get_recent_agent_actions": _get_recent_actions,
         "enqueue_user_notification": _enqueue_notification,
         "flag_for_review": _flag_for_review,
+        # Affordability advisor tools (read + write Claims)
+        "get_user_income_summary": _get_income_summary,
+        "get_user_recurring_burden": _get_recurring_burden,
+        "get_rate_snapshot": _get_rate_snapshot,
+        "compute_mortgage_scenario": _compute_mortgage_scenario,
+        "compute_dti_scenario": _compute_dti_scenario,
+        "stress_test_scenario": _stress_test_scenario,
+        "emit_claim": _emit_claim,
+        "list_claims": _list_claims,
+        "get_claim": _get_claim,
     }
     handler = handlers.get(tool_name)
     if not handler:
@@ -260,3 +273,198 @@ def _flag_for_review(inp: dict, store: BankStore) -> dict:
     review_id = f"rev_{inp['item_type']}_{inp['item_id'][:8]}"
     store._log("flag_for_review", inp["item_type"], inp["item_id"], {"reason": inp["reason"]})
     return {"success": True, "review_id": review_id}
+
+
+# --- Affordability advisor handlers ---
+
+def _get_income_summary(inp: dict, store: BankStore) -> dict:
+    """Compute monthly income from classifications + transactions."""
+    income_txns = [
+        store.transactions[c.transaction_id]
+        for c in store.classifications.values()
+        if c.category == "income" and c.transaction_id in store.transactions
+    ]
+    if not income_txns:
+        # Fallback: positive amounts
+        income_txns = [t for t in store.transactions.values() if t.amount > 0]
+
+    if not income_txns:
+        return {
+            "monthly_income_eur": 0.0,
+            "stability_score": 0.0,
+            "months_observed": 0,
+            "last_six_months_eur": [],
+            "warning": "NO_INCOME_DATA — cannot compute affordability without income",
+        }
+
+    # Group by month, sum credits
+    from collections import defaultdict
+    by_month: dict[str, float] = defaultdict(float)
+    for t in income_txns:
+        ym = t.date[:7]  # YYYY-MM
+        by_month[ym] += t.amount
+
+    months_sorted = sorted(by_month.keys())[-6:]
+    last_six = [round(by_month[m], 2) for m in months_sorted]
+    monthly_avg = round(sum(last_six) / len(last_six), 2) if last_six else 0.0
+    # Stability: 1 - coefficient of variation, clamped to [0,1]
+    if len(last_six) >= 2:
+        mean = sum(last_six) / len(last_six)
+        variance = sum((x - mean) ** 2 for x in last_six) / len(last_six)
+        std = variance ** 0.5
+        cv = std / mean if mean > 0 else 1.0
+        stability = max(0.0, min(1.0, 1.0 - cv))
+    else:
+        stability = 0.5
+
+    return {
+        "monthly_income_eur": monthly_avg,
+        "stability_score": round(stability, 3),
+        "months_observed": len(last_six),
+        "last_six_months_eur": last_six,
+    }
+
+
+def _get_recurring_burden(inp: dict, store: BankStore) -> dict:
+    """Sum monthly recurring debits, broken down by category."""
+    from collections import defaultdict
+    monthly_total = 0.0
+    breakdown: dict[str, float] = defaultdict(float)
+
+    for c in store.classifications.values():
+        if c.category == "income":
+            continue
+        if c.criticality == "discretionary":
+            # Discretionary excluded from "recurring burden" — they're cuttable spend
+            continue
+        tx = store.transactions.get(c.transaction_id)
+        if not tx or tx.amount >= 0:
+            continue
+        amount_abs = abs(tx.amount)
+        breakdown[c.category] += amount_abs
+        monthly_total += amount_abs
+
+    return {
+        "total_monthly_eur": round(monthly_total, 2),
+        "breakdown": {k: round(v, 2) for k, v in breakdown.items()},
+        "note": (
+            "Sums essential + cuttable categories only; discretionary excluded "
+            "as elastic spend that can be reduced under stress."
+        ),
+    }
+
+
+def _get_rate_snapshot(inp: dict, store: BankStore) -> dict:
+    snap = rates_source.get_rate_snapshot()
+    return {
+        "spot_euribor_pct": snap.spot_euribor_pct,
+        "term_structure": snap.term_structure,
+        "bank_margin_bps_default": snap.bank_margin_bps_default,
+        "snapshot_date": snap.snapshot_date,
+        "source": snap.source,
+        "disclaimer": snap.disclaimer,
+    }
+
+
+def _compute_mortgage_scenario(inp: dict, store: BankStore) -> dict:
+    try:
+        result = mortgage_math.compute_mortgage(
+            principal=inp["principal_eur"],
+            rate_pct=inp["rate_pct"],
+            term_years=inp["term_years"],
+            type=inp["type"],
+            margin_bps=inp.get("margin_bps", 0),
+        )
+    except ValueError as e:
+        return {"isError": True, "reason_code": "INVALID_INPUTS", "guidance": str(e)}
+    return {
+        "monthly_payment_eur": result.monthly_payment_eur,
+        "total_interest_eur": result.total_interest_eur,
+        "total_paid_eur": result.total_paid_eur,
+        "rate_pct": result.rate_pct,
+        "term_years": result.term_years,
+        "type": result.type,
+        "margin_bps": result.margin_bps,
+    }
+
+
+def _compute_dti_scenario(inp: dict, store: BankStore) -> dict:
+    try:
+        result = mortgage_math.compute_dti(
+            monthly_income_eur=inp["monthly_income_eur"],
+            monthly_debt_eur=inp["monthly_debt_eur"],
+            recommended_max_dti=inp.get("recommended_max_dti", 0.36),
+        )
+    except ValueError as e:
+        return {"isError": True, "reason_code": "INVALID_INPUTS", "guidance": str(e)}
+    return {
+        "dti_ratio": result.dti_ratio,
+        "monthly_income_eur": result.monthly_income_eur,
+        "monthly_debt_eur": result.monthly_debt_eur,
+        "headroom_eur": result.headroom_eur,
+        "recommended_max_dti": result.recommended_max_dti,
+    }
+
+
+def _stress_test_scenario(inp: dict, store: BankStore) -> dict:
+    try:
+        base = mortgage_math.compute_mortgage(
+            principal=inp["principal_eur"],
+            rate_pct=inp["base_rate_pct"],
+            term_years=inp["term_years"],
+            type=inp["type"],
+            margin_bps=0,
+        )
+        result = mortgage_math.stress_test(
+            base_mortgage=base,
+            monthly_income_eur=inp["monthly_income_eur"],
+            other_monthly_debt_eur=inp.get("other_monthly_debt_eur", 0.0),
+            rate_shock_bps=inp.get("rate_shock_bps", 0),
+            income_shock_pct=inp.get("income_shock_pct", 0.0),
+            label=inp.get("label"),
+        )
+    except ValueError as e:
+        return {"isError": True, "reason_code": "INVALID_INPUTS", "guidance": str(e)}
+    return {
+        "scenario_label": result.scenario_label,
+        "rate_shock_bps": result.rate_shock_bps,
+        "income_shock_pct": result.income_shock_pct,
+        "stressed_monthly_payment_eur": result.stressed_monthly_payment_eur,
+        "stressed_dti": result.stressed_dti,
+        "survives": result.survives,
+        "headroom_after_shock_eur": result.headroom_after_shock_eur,
+    }
+
+
+def _emit_claim(inp: dict, store: BankStore) -> dict:
+    if not inp.get("id", "").startswith("claim_"):
+        return {"isError": True, "reason_code": "BAD_CLAIM_ID",
+                "guidance": "Claim ids must start with 'claim_'."}
+    claim = Claim(
+        id=inp["id"],
+        value=inp["value"],
+        unit=inp["unit"],
+        label=inp["label"],
+        source_tool=inp["source_tool"],
+        source_args=inp.get("source_args", {}),
+        inputs=inp.get("inputs", []),
+        confidence=inp.get("confidence", 1.0),
+    )
+    store.emit_claim(claim)
+    return {"success": True, "claim_id": claim.id}
+
+
+def _list_claims(inp: dict, store: BankStore) -> dict:
+    prefix = inp.get("label_prefix")
+    return {
+        "claims": [c.to_dict() for c in store.list_claims(prefix)],
+        "count": len(store.claims),
+    }
+
+
+def _get_claim(inp: dict, store: BankStore) -> dict:
+    claim = store.get_claim(inp["claim_id"])
+    if claim is None:
+        return {"isError": True, "reason_code": "CLAIM_NOT_FOUND",
+                "guidance": f"Claim '{inp['claim_id']}' not found. Use list_claims first."}
+    return {"claim": claim.to_dict()}

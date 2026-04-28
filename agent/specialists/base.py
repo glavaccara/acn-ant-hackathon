@@ -1,16 +1,17 @@
 """Base specialist: runs an agent loop with explicit context and its own tool set."""
 import json
 import logging
+import os
 from typing import Any
 
-import anthropic
+from anthropic import AnthropicBedrock
 
 from agent.bank_store import BankStore
 from agent.tools.executor import execute_tool
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = os.getenv("CASH_COMPASS_HAIKU_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 MAX_ITERATIONS = 8
 
 
@@ -18,10 +19,15 @@ class BaseSpecialist:
     name: str = "base"
     system_prompt: str = ""
     tools: list[dict] = []
+    max_iterations: int = MAX_ITERATIONS  # subclasses can override for chattier workflows
+    max_tokens_per_call: int = 4096
 
     def __init__(self, store: BankStore):
         self.store = store
-        self.client = anthropic.Anthropic()
+        self.client = AnthropicBedrock(
+            aws_profile=os.getenv("AWS_PROFILE", "bootcamp"),
+            aws_region=os.getenv("AWS_REGION", "us-east-1"),
+        )
 
     def run(self, context: dict) -> dict:
         """
@@ -36,10 +42,10 @@ class BaseSpecialist:
         messages = [{"role": "user", "content": user_message}]
         reasoning_chain = []
 
-        for iteration in range(MAX_ITERATIONS):
+        for iteration in range(self.max_iterations):
             response = self.client.messages.create(
                 model=MODEL,
-                max_tokens=4096,
+                max_tokens=self.max_tokens_per_call,
                 system=self.system_prompt,
                 messages=messages,
                 tools=self.tools,
