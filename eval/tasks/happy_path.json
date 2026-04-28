@@ -1,0 +1,214 @@
+[
+  {
+    "id": "hp_classify_grocery_001",
+    "description": "Classify a clear grocery transaction",
+    "category": "classification",
+    "difficulty": "easy",
+    "tags": ["grocery", "essential", "auto-classify"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_001", "date": "2026-04-02", "merchant": "Esselunga", "amount": -87.40, "memo": "Pagamento pos", "mcc": "5411"}
+      ],
+      "envelopes": [{"category": "groceries", "monthly_limit": 300.0, "spent": 150.0}]
+    },
+    "input": {
+      "type": "batch_classify",
+      "transaction_ids": ["tx_001"],
+      "context": "Classify the following transactions"
+    },
+    "expected_outcome": {
+      "bank_store_mutations_include": [
+        {"entity": "classifications", "key": "tx_001", "field": "category", "value": "groceries"}
+      ],
+      "tool_calls_must_include": ["set_transaction_classification"],
+      "escalate": false,
+      "min_confidence": 0.80
+    }
+  },
+  {
+    "id": "hp_classify_income_001",
+    "description": "Classify salary credit",
+    "category": "classification",
+    "difficulty": "easy",
+    "tags": ["income", "essential"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_002", "date": "2026-04-15", "merchant": "STIPENDIO", "amount": 2200.00, "memo": "Accredito stipendio aprile", "mcc": null}
+      ]
+    },
+    "input": {"type": "batch_classify", "transaction_ids": ["tx_002"]},
+    "expected_outcome": {
+      "bank_store_mutations_include": [
+        {"entity": "classifications", "key": "tx_002", "field": "category", "value": "income"},
+        {"entity": "classifications", "key": "tx_002", "field": "criticality", "value": "essential"}
+      ],
+      "tool_calls_must_include": ["set_transaction_classification"],
+      "escalate": false,
+      "min_confidence": 0.85
+    }
+  },
+  {
+    "id": "hp_classify_utility_001",
+    "description": "Classify utility bill",
+    "category": "classification",
+    "difficulty": "easy",
+    "tags": ["utilities", "essential"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_003", "date": "2026-04-03", "merchant": "ENEL Energia", "amount": -94.12, "memo": "Bolletta energia", "mcc": "4900"}
+      ]
+    },
+    "input": {"type": "batch_classify", "transaction_ids": ["tx_003"]},
+    "expected_outcome": {
+      "bank_store_mutations_include": [
+        {"entity": "classifications", "key": "tx_003", "field": "category", "value": "utilities"}
+      ],
+      "tool_calls_must_include": ["set_transaction_classification"],
+      "escalate": false,
+      "min_confidence": 0.90
+    }
+  },
+  {
+    "id": "hp_classify_entertainment_001",
+    "description": "Classify streaming subscription",
+    "category": "classification",
+    "difficulty": "easy",
+    "tags": ["entertainment", "discretionary", "subscription"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_004", "date": "2026-04-07", "merchant": "Netflix", "amount": -17.99, "memo": "NETFLIX.COM", "mcc": "7922"}
+      ]
+    },
+    "input": {"type": "batch_classify", "transaction_ids": ["tx_004"]},
+    "expected_outcome": {
+      "bank_store_mutations_include": [
+        {"entity": "classifications", "key": "tx_004", "field": "category", "value": "entertainment"},
+        {"entity": "classifications", "key": "tx_004", "field": "criticality", "value": "discretionary"}
+      ],
+      "escalate": false
+    }
+  },
+  {
+    "id": "hp_budget_envelope_on_track_001",
+    "description": "Dining envelope on track — no adjustment needed",
+    "category": "budget_review",
+    "difficulty": "easy",
+    "tags": ["dining", "on_track"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_005", "date": "2026-04-09", "merchant": "Bar del Corso", "amount": -4.50, "memo": "Caffè", "mcc": "5812"}
+      ],
+      "envelopes": [{"category": "dining", "monthly_limit": 150.0, "spent": 42.50}]
+    },
+    "input": {"type": "budget_review", "categories": ["dining"]},
+    "expected_outcome": {
+      "bank_store_mutations_include": [],
+      "no_envelope_update": true,
+      "escalate": false
+    }
+  },
+  {
+    "id": "hp_savings_goal_create_001",
+    "description": "Create savings goal from detected surplus",
+    "category": "budget_review",
+    "difficulty": "medium",
+    "tags": ["savings", "goal_creation"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_006", "date": "2026-04-15", "merchant": "STIPENDIO", "amount": 2200.00, "memo": "Stipendio", "mcc": null}
+      ],
+      "envelopes": [
+        {"category": "groceries", "monthly_limit": 300.0, "spent": 180.0},
+        {"category": "dining", "monthly_limit": 150.0, "spent": 60.0},
+        {"category": "utilities", "monthly_limit": 200.0, "spent": 161.0}
+      ]
+    },
+    "input": {"type": "budget_review", "categories": ["groceries", "dining", "utilities"]},
+    "expected_outcome": {
+      "no_escalation_for_small_contribution": true,
+      "max_contribution_auto_applied": 200.0,
+      "escalate": false
+    }
+  },
+  {
+    "id": "hp_notify_budget_alert_001",
+    "description": "Surface budget overrun alert for dining",
+    "category": "surface_questions",
+    "difficulty": "easy",
+    "tags": ["dining", "budget_alert", "notification"],
+    "initial_state": {
+      "envelopes": [{"category": "dining", "monthly_limit": 150.0, "spent": 142.00}],
+      "transactions": []
+    },
+    "input": {"type": "surface_questions", "focus": "budget_alerts"},
+    "expected_outcome": {
+      "notification_enqueued": true,
+      "notification_category": "budget_alert",
+      "escalate": false
+    }
+  },
+  {
+    "id": "hp_classify_refund_001",
+    "description": "Classify a refund correctly as positive income type",
+    "category": "classification",
+    "difficulty": "medium",
+    "tags": ["refund", "travel"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_007", "date": "2026-04-20", "merchant": "Ryanair Refund", "amount": 45.00, "memo": "Rimborso volo FR1234", "mcc": "4511"}
+      ]
+    },
+    "input": {"type": "batch_classify", "transaction_ids": ["tx_007"]},
+    "expected_outcome": {
+      "bank_store_mutations_include": [
+        {"entity": "classifications", "key": "tx_007", "field": "category", "value": "travel"}
+      ],
+      "escalate": false,
+      "note": "Refund should be classified as travel (positive), not flagged as error"
+    }
+  },
+  {
+    "id": "hp_classify_transport_001",
+    "description": "Classify train ticket",
+    "category": "classification",
+    "difficulty": "easy",
+    "tags": ["transport", "essential"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_008", "date": "2026-04-12", "merchant": "Trenitalia", "amount": -42.00, "memo": "Milano-Roma", "mcc": "4112"}
+      ]
+    },
+    "input": {"type": "batch_classify", "transaction_ids": ["tx_008"]},
+    "expected_outcome": {
+      "bank_store_mutations_include": [
+        {"entity": "classifications", "key": "tx_008", "field": "category", "value": "transport"},
+        {"entity": "classifications", "key": "tx_008", "field": "criticality", "value": "essential"}
+      ],
+      "escalate": false
+    }
+  },
+  {
+    "id": "hp_full_pipeline_001",
+    "description": "Full pipeline: classify + forecast + surface",
+    "category": "full_pipeline",
+    "difficulty": "medium",
+    "tags": ["end_to_end", "multi_specialist"],
+    "initial_state": {
+      "transactions": [
+        {"id": "tx_009", "date": "2026-04-02", "merchant": "Esselunga", "amount": -87.40, "memo": "Spesa settimanale", "mcc": "5411"},
+        {"id": "tx_010", "date": "2026-04-03", "merchant": "ENEL Energia", "amount": -94.12, "memo": "Bolletta", "mcc": "4900"},
+        {"id": "tx_011", "date": "2026-04-15", "merchant": "STIPENDIO", "amount": 2200.00, "memo": "Accredito", "mcc": null}
+      ],
+      "envelopes": [
+        {"category": "groceries", "monthly_limit": 300.0, "spent": 87.40},
+        {"category": "utilities", "monthly_limit": 200.0, "spent": 94.12}
+      ]
+    },
+    "input": {"type": "full_pipeline"},
+    "expected_outcome": {
+      "classifications_created": 3,
+      "escalate": false,
+      "mutations_not_empty": true
+    }
+  }
+]
